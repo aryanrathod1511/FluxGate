@@ -1,6 +1,7 @@
-package config
+package configuration
 
 import (
+	"FluxGate/loadbalancer"
 	"sync"
 )
 
@@ -10,13 +11,14 @@ type GatewayConfigStore struct {
 }
 
 type RouteConfig struct {
-	Path          string           `json:"path"`
-	Method        string           `json:"method"`
-	Upstreams     []UpstreamConfig `json:"upstreams"`
-	LoadBalancing string           `json:"load_balancing"`
-	RateLimit     RateLimitConfig  `json:"rate_limit"`
-	CacheTTL      int64            `json:"cache_ttl"`
-	CacheEnabled  bool             `json:"cache_enabled"`
+	Path          string                    `json:"path"`
+	Method        string                    `json:"method"`
+	Upstreams     []UpstreamConfig          `json:"upstreams"`
+	LoadBalancing string                    `json:"load_balancing"`
+	LoadBalancer  loadbalancer.LoadBalancer `json:"-"`
+	RateLimit     RateLimitConfig           `json:"rate_limit"`
+	CacheTTL      int64                     `json:"cache_ttl"`
+	CacheEnabled  bool                      `json:"cache_enabled"`
 
 	CircuitBreaker CircuitBreakerConfig `json:"circuit_breaker"`
 
