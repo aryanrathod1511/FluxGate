@@ -10,6 +10,12 @@ type RoundRobin struct {
 	indx    uint64
 }
 
+func init() {
+	RegistrLoadBalancer("round_robin", func(servers []string) LoadBalancer {
+		return NewRoundRobin(servers)
+	})
+}
+
 func NewRoundRobin(servers []string) *RoundRobin {
 	return &RoundRobin{servers: servers}
 }

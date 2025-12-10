@@ -3,6 +3,7 @@ package gateway
 import (
 	"FluxGate/configuration"
 	"FluxGate/loadbalancer"
+	"context"
 	"net/http"
 )
 
@@ -17,6 +18,11 @@ func NewGateway(store *configuration.GatewayConfigStore, lbs map[string]loadbala
 		LBs:   lbs,
 	}
 }
+
+// Define a typed key
+type ctxKey string
+
+const RouteCtxKey ctxKey = "route"
 
 func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 	userId := r.Header.Get("X-User-ID")
@@ -37,5 +43,11 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//proxy.Forward(upstream, w, r)
+	// Store route in context
+	r = r.WithContext(
+		context.WithValue(r.Context(), RouteCtxKey, route),
+	)
+
+	// Continue to middleware chain
+	//g.Proxy.Forward(upstream, w, r)
 }

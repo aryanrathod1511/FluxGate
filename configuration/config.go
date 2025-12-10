@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"FluxGate/loadbalancer"
+	"FluxGate/ratelimit"
 	"sync"
 )
 
@@ -11,18 +12,48 @@ type GatewayConfigStore struct {
 }
 
 type RouteConfig struct {
-	Path          string                    `json:"path"`
-	Method        string                    `json:"method"`
-	Upstreams     []UpstreamConfig          `json:"upstreams"`
-	LoadBalancing string                    `json:"load_balancing"`
-	LoadBalancer  loadbalancer.LoadBalancer `json:"-"`
-	RateLimit     RateLimitConfig           `json:"rate_limit"`
-	CacheTTL      int64                     `json:"cache_ttl"`
-	CacheEnabled  bool                      `json:"cache_enabled"`
+	Path        string           `json:"path"`
+	Method      string           `json:"method"`
+	Upstreams   []UpstreamConfig `json:"upstreams"`
+	LoadBalance string           `json:"load_balancing"`
 
-	CircuitBreaker CircuitBreakerConfig `json:"circuit_breaker"`
+	// LB instance
+	LoadBalancer loadbalancer.LoadBalancer `json:"-"`
 
-	Plugins []string `json:"plugins"`
+	// Rate limit
+	RouteRateLimit RouteRateLimitConfig `json:"route_rate_limit"`
+	UserRateLimit  UserRateLimitConfig  `json:"user_rate_limit"`
+
+	// Instances
+	RouteRateLimiter ratelimit.RateLimiter `json:"-"` // single instance
+	UserRateLimiter  sync.Map              `json:"-"` // multiple instances
+
+	CacheTTL     int64 `json:"cache_ttl"`
+	CacheEnabled bool  `json:"cache_enabled"`
+
+	CircuitBreaker  CircuitBreakerConfig `json:"circuit_breaker"`
+	UserIdentityKey []string             `json:"user_id_key"`
+	Plugins         []string             `json:"plugins"`
+}
+
+// "user_id_keys": [
+//     "jwt:sub",
+//     "header:X-API-Key",
+//     "jwt:user_id",
+//     "query:uid",
+//     "ip"
+//   ],
+
+type RouteRateLimitConfig struct {
+	Capacity   float64 `json:"capacity"`    // max tokens
+	RefillRate float64 `json:"refill_rate"` // tokens/sec
+	Type       string  `json:"type"`        // "token_bucket" / "none"
+}
+
+type UserRateLimitConfig struct {
+	Capacity   float64 `json:"capacity"`
+	RefillRate float64 `json:"refill_rate"`
+	Type       string  `json:"type"`
 }
 
 type UpstreamConfig struct {
@@ -31,11 +62,6 @@ type UpstreamConfig struct {
 	RetryEnabled bool   `json:"retry_enabled"`
 	Retries      int    `json:"retries"`
 	BaseTimeMs   int64  `json:"base_time_ms"`
-}
-
-type RateLimitConfig struct {
-	Enabled bool  `json:"enabled"`
-	Rate    int64 `json:"rate"`
 }
 
 type CircuitBreakerConfig struct {

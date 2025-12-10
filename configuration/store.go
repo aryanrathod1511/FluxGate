@@ -2,9 +2,11 @@ package configuration
 
 import (
 	"FluxGate/loadbalancer"
+	"FluxGate/ratelimit"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 // constructor
@@ -43,9 +45,10 @@ func (store *GatewayConfigStore) LoadConfig(userId string, configData []byte) er
 		return err
 	}
 
-	// spin up loadbalancer instance for each route
+	// spin up loadbalancer and ratelimiter instances for each route
 
 	assignLoadBalancer(routes)
+	assignRateLimiter(routes)
 
 	store.users[userId] = routes
 	return nil
@@ -68,6 +71,7 @@ func (store *GatewayConfigStore) UpdateConfig(userId string, configData []byte) 
 	}
 
 	assignLoadBalancer(routes)
+	assignRateLimiter(routes)
 
 	store.mu.Lock()
 	store.users[userId] = routes
@@ -96,18 +100,7 @@ func (store *GatewayConfigStore) MatchPath(userId string, path string, method st
 // utils
 func assignLoadBalancer(routes []*RouteConfig) {
 	for _, route := range routes {
-		lbType := route.LoadBalancing
-		switch lbType {
-		case "round_robin":
-			route.LoadBalancer = loadbalancer.NewRoundRobin(getUpstreamURLs(route.Upstreams))
-		case "weighted_round_robin":
-			route.LoadBalancer = loadbalancer.NewWeightedRoundRobin(
-				getUpstreamURLs(route.Upstreams),
-				getUpstreamWeights(route.Upstreams),
-			)
-		default:
-			route.LoadBalancer = loadbalancer.NewRoundRobin(getUpstreamURLs(route.Upstreams))
-		}
+		route.LoadBalancer = loadbalancer.New(route.LoadBalance, getUpstreamURLs(route.Upstreams))
 	}
 }
 
@@ -125,4 +118,23 @@ func getUpstreamWeights(upstreams []UpstreamConfig) []int {
 		weights = append(weights, upstream.Weight)
 	}
 	return weights
+}
+
+func assignRateLimiter(routes []*RouteConfig) {
+	for _, route := range routes {
+
+		// ROUTE-LEVEL rate limiter
+		if route.RouteRateLimit.Type != "" && route.RouteRateLimit.Type != "none" {
+			route.RouteRateLimiter = ratelimit.New(
+				route.RouteRateLimit.Type,
+				route.RouteRateLimit.Capacity,
+				route.RouteRateLimit.RefillRate,
+			)
+		} else {
+			route.RouteRateLimiter = nil
+		}
+
+		// USER-LEVEL rate limiters
+		route.UserRateLimiter = sync.Map{}
+	}
 }
