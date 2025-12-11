@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"FluxGate/configuration"
-	"FluxGate/gateway"
 	"FluxGate/storage"
 	"bytes"
 	"net/http"
@@ -15,7 +14,7 @@ func CacheMiddleware(store *configuration.GatewayConfigStore) func(http.Handler)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			// extract route from context
-			route := r.Context().Value(gateway.RouteCtxKey).(*configuration.RouteConfig)
+			route := r.Context().Value(configuration.RouteCtxKey).(*configuration.RouteConfig)
 
 			cache := route.CacheInstance
 			if cache == nil {

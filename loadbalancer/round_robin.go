@@ -11,7 +11,7 @@ type RoundRobin struct {
 }
 
 func init() {
-	RegistrLoadBalancer("round_robin", func(servers []string) LoadBalancer {
+	RegistrLoadBalancer("round_robin", func(servers []string, weights []int) LoadBalancer {
 		return NewRoundRobin(servers)
 	})
 }

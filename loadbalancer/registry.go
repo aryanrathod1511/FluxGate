@@ -1,7 +1,7 @@
 package loadbalancer
 
-var Registry = make(map[string]func([]string) LoadBalancer)
+var Registry = make(map[string]func([]string, []int) LoadBalancer)
 
-func RegistrLoadBalancer(name string, constructor func([]string) LoadBalancer) {
+func RegistrLoadBalancer(name string, constructor func([]string, []int) LoadBalancer) {
 	Registry[name] = constructor
 }

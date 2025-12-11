@@ -13,6 +13,12 @@ type GatewayConfigStore struct {
 	Users map[string][]*RouteConfig
 }
 
+// shared context key type and keys used across packages
+type CtxKey string
+
+const RouteCtxKey CtxKey = "route"
+const UpstreamCtxKey CtxKey = "upstream"
+
 type RouteConfig struct {
 	Path        string           `json:"path"`
 	Method      string           `json:"method"`

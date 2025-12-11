@@ -4,9 +4,11 @@ import (
 	"FluxGate/circuitbreaker"
 	"FluxGate/configuration"
 	"FluxGate/middleware"
+	"FluxGate/proxy"
 	"FluxGate/utils"
 	"context"
 	"net/http"
+	"time"
 )
 
 type Gateway struct {
@@ -38,11 +40,6 @@ func NewGateway(store *configuration.GatewayConfigStore) *Gateway {
 	return &Gateway{Store: store, Breaker: Breaker}
 }
 
-// Define a typed key
-type ctxKey string
-
-const RouteCtxKey ctxKey = "route"
-
 func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 	userId := r.Header.Get("X-User-ID")
 	if userId == "" {
@@ -50,27 +47,43 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// match route
 	route, err := g.Store.MatchPath(userId, r.URL.Path, r.Method)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// pick upstream
 	upstream, err := utils.PickHealthyServer(route.LoadBalancer, g.Breaker)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
-	// Store route in context
-	r = r.WithContext(
-		context.WithValue(r.Context(), RouteCtxKey, route),
-	)
+	// put route + upstream into context
+	r = r.WithContext(context.WithValue(r.Context(), configuration.RouteCtxKey, route))
+	r = r.WithContext(context.WithValue(r.Context(), middleware.UpstreamCtxKey, upstream))
 
-	// attach selected upstream into context so middlewares can act on it
-	r = r.WithContext(
-		context.WithValue(r.Context(), middleware.UpstreamCtxKey, upstream))
+	// build middleware chain
+	chain := g.wrapWithMiddlewares(proxyHandler)
 
-	// Continue to middleware chain and then proxy
-
+	// run the chain
+	chain.ServeHTTP(w, r)
 }
+
+func (g *Gateway) wrapWithMiddlewares(final http.Handler) http.Handler {
+	h := final
+	h = middleware.CacheMiddleware(g.Store)(h)
+	h = middleware.RateLimiter(h) // your RL middleware
+	h = middleware.CircuitBreakerMiddleware(g.Breaker)(h)
+
+	return h
+}
+
+var proxyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream := r.Context().Value(middleware.UpstreamCtxKey).(string)
+
+	timeout := 5 * time.Second
+	proxy.ReverseProxy(w, r, upstream, timeout)
+})

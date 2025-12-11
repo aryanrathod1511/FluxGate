@@ -7,15 +7,11 @@ import (
 	"strings"
 )
 
-type CtxKey string
-
-const RouteCtxKey CtxKey = "route"
-
 func RateLimiter(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// Get route from context
-		val := r.Context().Value(RouteCtxKey)
+		val := r.Context().Value(configuration.RouteCtxKey)
 		if val == nil {
 			next.ServeHTTP(w, r)
 			return

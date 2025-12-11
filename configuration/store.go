@@ -104,7 +104,7 @@ func (store *GatewayConfigStore) MatchPath(userId string, path string, method st
 // utils
 func assignLoadBalancer(routes []*RouteConfig) {
 	for _, route := range routes {
-		route.LoadBalancer = loadbalancer.New(route.LoadBalance, getUpstreamURLs(route.Upstreams))
+		route.LoadBalancer = loadbalancer.New(route.LoadBalance, getUpstreamURLs(route.Upstreams), getUpstreamWeights(route.Upstreams))
 	}
 }
 

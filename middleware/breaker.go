@@ -2,10 +2,11 @@ package middleware
 
 import (
 	"FluxGate/circuitbreaker"
+	"FluxGate/configuration"
 	"net/http"
 )
 
-const UpstreamCtxKey CtxKey = "upstream"
+const UpstreamCtxKey = configuration.UpstreamCtxKey
 
 func CircuitBreakerMiddleware(breakers map[string]*circuitbreaker.CircuitBreaker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
