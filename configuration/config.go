@@ -3,7 +3,9 @@ package configuration
 import (
 	"FluxGate/loadbalancer"
 	"FluxGate/ratelimit"
+	"FluxGate/storage"
 	"sync"
+	"time"
 )
 
 type GatewayConfigStore struct {
@@ -28,8 +30,8 @@ type RouteConfig struct {
 	RouteRateLimiter ratelimit.RateLimiter `json:"-"` // single instance
 	UserRateLimiter  sync.Map              `json:"-"` // multiple instances
 
-	CacheTTL     int64 `json:"cache_ttl"`
-	CacheEnabled bool  `json:"cache_enabled"`
+	Cache         CacheConfig       `json:"cache"`
+	CacheInstance *storage.LRUCache `json:"-"`
 
 	UserIdentityKey []string `json:"user_id_key"`
 	Plugins         []string `json:"plugins"`
@@ -73,4 +75,10 @@ type CircuitBreakerConfig struct {
 	OpenSeconds      int `json:"open_seconds"`
 	HalfOpenRequests int `json:"half_open_requests"`
 	SuccessThreshold int `json:"success_threshold"`
+}
+
+type CacheConfig struct {
+	Enabled  bool          `json:"enabled"`
+	TTL      time.Duration `json:"ttl_ms"`
+	MaxEntry int           `json:"max_entry"`
 }

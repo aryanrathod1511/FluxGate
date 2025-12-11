@@ -3,10 +3,12 @@ package configuration
 import (
 	"FluxGate/loadbalancer"
 	"FluxGate/ratelimit"
+	"FluxGate/storage"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
 
 // constructor
@@ -45,10 +47,11 @@ func (store *GatewayConfigStore) LoadConfig(userId string, configData []byte) er
 		return err
 	}
 
-	// spin up loadbalancer and ratelimiter instances for each route
+	// spin up loadbalancer, ratelimiter and LRU cache instances for each route
 
 	assignLoadBalancer(routes)
 	assignRateLimiter(routes)
+	assignCacheInstances(routes)
 
 	store.Users[userId] = routes
 	return nil
@@ -72,6 +75,7 @@ func (store *GatewayConfigStore) UpdateConfig(userId string, configData []byte) 
 
 	assignLoadBalancer(routes)
 	assignRateLimiter(routes)
+	assignCacheInstances(routes)
 
 	store.mu.Lock()
 	store.Users[userId] = routes
@@ -136,5 +140,16 @@ func assignRateLimiter(routes []*RouteConfig) {
 
 		// USER-LEVEL rate limiters
 		route.UserRateLimiter = sync.Map{}
+	}
+}
+
+func assignCacheInstances(routes []*RouteConfig) {
+	for _, route := range routes {
+		if route.Cache.Enabled {
+			route.CacheInstance = storage.NewLRUCache(
+				route.Cache.MaxEntry,
+				time.Duration(route.Cache.TTL)*time.Millisecond,
+			)
+		}
 	}
 }
