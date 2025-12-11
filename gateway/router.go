@@ -1,22 +1,41 @@
 package gateway
 
 import (
+	"FluxGate/circuitbreaker"
 	"FluxGate/configuration"
-	"FluxGate/loadbalancer"
+	"FluxGate/middleware"
+	"FluxGate/utils"
 	"context"
 	"net/http"
 )
 
 type Gateway struct {
-	Store *configuration.GatewayConfigStore
-	LBs   map[string]loadbalancer.LoadBalancer
+	Store   *configuration.GatewayConfigStore
+	Breaker map[string]*circuitbreaker.CircuitBreaker
 }
 
-func NewGateway(store *configuration.GatewayConfigStore, lbs map[string]loadbalancer.LoadBalancer) *Gateway {
-	return &Gateway{
-		Store: store,
-		LBs:   lbs,
+func NewGateway(store *configuration.GatewayConfigStore) *Gateway {
+	Breaker := make(map[string]*circuitbreaker.CircuitBreaker)
+
+	// for each user and their routes build per-upstream circuit breakers
+	for _, routes := range store.Users {
+		for _, route := range routes {
+			servers := route.LoadBalancer.Servers()
+			for i, server := range servers {
+				if _, exists := Breaker[server]; !exists {
+					// find corresponding upstream config
+					var cfg configuration.CircuitBreakerConfig
+					if i < len(route.Upstreams) {
+						cfg = route.Upstreams[i].CircuitBreaker
+					}
+					// create circuit breaker using config
+					Breaker[server] = circuitbreaker.New(cfg)
+				}
+			}
+		}
 	}
+
+	return &Gateway{Store: store, Breaker: Breaker}
 }
 
 // Define a typed key
@@ -37,7 +56,7 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream, err := route.LoadBalancer.NextServer()
+	upstream, err := utils.PickHealthyServer(route.LoadBalancer, g.Breaker)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -48,6 +67,10 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 		context.WithValue(r.Context(), RouteCtxKey, route),
 	)
 
-	// Continue to middleware chain
-	//g.Proxy.Forward(upstream, w, r)
+	// attach selected upstream into context so middlewares can act on it
+	r = r.WithContext(
+		context.WithValue(r.Context(), middleware.UpstreamCtxKey, upstream))
+
+	// Continue to middleware chain and then proxy
+
 }

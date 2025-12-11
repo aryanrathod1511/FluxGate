@@ -8,7 +8,7 @@ import (
 
 type GatewayConfigStore struct {
 	mu    sync.RWMutex
-	users map[string][]*RouteConfig
+	Users map[string][]*RouteConfig
 }
 
 type RouteConfig struct {
@@ -31,9 +31,8 @@ type RouteConfig struct {
 	CacheTTL     int64 `json:"cache_ttl"`
 	CacheEnabled bool  `json:"cache_enabled"`
 
-	CircuitBreaker  CircuitBreakerConfig `json:"circuit_breaker"`
-	UserIdentityKey []string             `json:"user_id_key"`
-	Plugins         []string             `json:"plugins"`
+	UserIdentityKey []string `json:"user_id_key"`
+	Plugins         []string `json:"plugins"`
 }
 
 // "user_id_keys": [
@@ -57,15 +56,21 @@ type UserRateLimitConfig struct {
 }
 
 type UpstreamConfig struct {
-	URL          string `json:"url"`
-	Weight       int    `json:"weight"`
-	RetryEnabled bool   `json:"retry_enabled"`
-	Retries      int    `json:"retries"`
-	BaseTimeMs   int64  `json:"base_time_ms"`
+	URL            string               `json:"url"`
+	Weight         int                  `json:"weight"`
+	RetryEnabled   bool                 `json:"retry_enabled"`
+	Retries        int                  `json:"retries"`
+	BaseTimeMs     int64                `json:"base_time_ms"`
+	CircuitBreaker CircuitBreakerConfig `json:"circuit_breaker"`
 }
 
 type CircuitBreakerConfig struct {
-	Enabled         bool    `json:"enabled"`
-	ErrorThreshold  float64 `json:"error_threshold"`
-	HalfOpenRequest int64   `json:"half_open_request"`
+	Enabled bool `json:"enabled"`
+
+	FailureThreshold int `json:"failure_threshold"`
+	WindowSeconds    int `json:"window_seconds"`
+
+	OpenSeconds      int `json:"open_seconds"`
+	HalfOpenRequests int `json:"half_open_requests"`
+	SuccessThreshold int `json:"success_threshold"`
 }

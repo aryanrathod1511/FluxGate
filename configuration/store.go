@@ -12,14 +12,14 @@ import (
 // constructor
 func NewGatewayConfigStore() *GatewayConfigStore {
 	return &GatewayConfigStore{
-		users: make(map[string][]*RouteConfig),
+		Users: make(map[string][]*RouteConfig),
 	}
 }
 
 // methods
 func (store *GatewayConfigStore) GetConfig(userId string) ([]byte, error) {
 	store.mu.RLock()
-	routes, ok := store.users[userId]
+	routes, ok := store.Users[userId]
 	store.mu.RUnlock()
 
 	if !ok {
@@ -50,7 +50,7 @@ func (store *GatewayConfigStore) LoadConfig(userId string, configData []byte) er
 	assignLoadBalancer(routes)
 	assignRateLimiter(routes)
 
-	store.users[userId] = routes
+	store.Users[userId] = routes
 	return nil
 }
 
@@ -58,7 +58,7 @@ func (store *GatewayConfigStore) DeleteConfig(userId string) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	delete(store.users, userId)
+	delete(store.Users, userId)
 }
 
 func (store *GatewayConfigStore) UpdateConfig(userId string, configData []byte) error {
@@ -74,7 +74,7 @@ func (store *GatewayConfigStore) UpdateConfig(userId string, configData []byte) 
 	assignRateLimiter(routes)
 
 	store.mu.Lock()
-	store.users[userId] = routes
+	store.Users[userId] = routes
 	store.mu.Unlock()
 	return nil
 }
@@ -83,7 +83,7 @@ func (store *GatewayConfigStore) MatchPath(userId string, path string, method st
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
-	routes, ok := store.users[userId]
+	routes, ok := store.Users[userId]
 	if !ok {
 		return nil, fmt.Errorf("no user found")
 	}

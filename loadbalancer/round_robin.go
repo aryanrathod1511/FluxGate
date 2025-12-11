@@ -28,3 +28,7 @@ func (rr *RoundRobin) NextServer() (string, error) {
 	i := atomic.AddUint64(&rr.indx, 1)
 	return rr.servers[(i-1)%uint64(len(rr.servers))], nil
 }
+
+func (rr *RoundRobin) Servers() []string {
+	return rr.servers
+}
