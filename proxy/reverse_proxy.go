@@ -43,7 +43,10 @@ func ReverseProxy(w http.ResponseWriter, r *http.Request, upstreamURL string, ti
 	}
 
 	// add forwarding headers
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
 	req.Header.Set("X-Forwarded-For", host)
 	req.Header.Set("X-Forwarded-Host", r.Host)
 	req.Header.Set("X-Forwarded-Proto", r.URL.Scheme)

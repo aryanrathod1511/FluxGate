@@ -92,13 +92,108 @@ func (store *GatewayConfigStore) MatchPath(userId string, path string, method st
 		return nil, fmt.Errorf("no user found")
 	}
 
-	//implement tighter prefix matching later
+	// Normalize incoming path: strip query and fragment (if any), ensure leading '/'
+	reqPath := path
+	if idx := strings.IndexAny(reqPath, "?#"); idx >= 0 {
+		reqPath = reqPath[:idx]
+	}
+	if reqPath == "" {
+		reqPath = "/"
+	}
+	// remove duplicate slashes and trailing slash (except root)
+	reqPath = "/" + strings.Trim(strings.ReplaceAll(reqPath, "//", "/"), "/")
+
+	// Pick the most specific matching route. Score higher for exact segment matches.
+	var best *RouteConfig
+	bestScore := -1
+
 	for _, route := range routes {
-		if strings.HasPrefix(path, route.Path) && route.Method == method {
-			return route, nil
+		if route.Method != method {
+			continue
+		}
+
+		// Normalize pattern from config similarly
+		pattern := route.Path
+		if idx := strings.IndexAny(pattern, "?#"); idx >= 0 {
+			pattern = pattern[:idx]
+		}
+		if pattern == "" {
+			pattern = "/"
+		}
+		pattern = "/" + strings.Trim(strings.ReplaceAll(pattern, "//", "/"), "/")
+
+		okMatch, score := matchAndScore(pattern, reqPath)
+		if okMatch {
+			if score > bestScore {
+				best = route
+				bestScore = score
+			}
 		}
 	}
+
+	if best != nil {
+		return best, nil
+	}
 	return nil, fmt.Errorf("no matching route found")
+}
+
+func matchAndScore(pattern, req string) (bool, int) {
+	// trim leading slash for splitting
+	p := strings.Trim(pattern, "/")
+	r := strings.Trim(req, "/")
+
+	if p == "" && r == "" {
+		return true, 100 // root exact
+	}
+
+	pSegs := []string{}
+	if p != "" {
+		pSegs = strings.Split(p, "/")
+	}
+	rSegs := []string{}
+	if r != "" {
+		rSegs = strings.Split(r, "/")
+	}
+
+	score := 0
+	i := 0
+	for i < len(pSegs) {
+		ps := pSegs[i]
+		// wildcard at end
+		if ps == "*" && i == len(pSegs)-1 {
+			// matches any remainder
+			score += 0
+			return true, score
+		}
+
+		if i >= len(rSegs) {
+			// pattern longer than request and not a trailing wildcard
+			return false, 0
+		}
+
+		rs := rSegs[i]
+
+		// parameter segments
+		if strings.HasPrefix(ps, ":") || (strings.HasPrefix(ps, "{") && strings.HasSuffix(ps, "}")) {
+			// matches any single segment, small score
+			score += 1
+		} else if ps == rs {
+			// exact match - higher score
+			score += 3
+		} else {
+			// no match
+			return false, 0
+		}
+
+		i++
+	}
+
+	// if pattern consumed but request has extra segments, no match unless pattern ended with wildcard
+	if len(rSegs) > len(pSegs) {
+		return false, 0
+	}
+
+	return true, score
 }
 
 // utils
@@ -126,7 +221,6 @@ func getUpstreamWeights(upstreams []UpstreamConfig) []int {
 
 func assignRateLimiter(routes []*RouteConfig) {
 	for _, route := range routes {
-
 		// ROUTE-LEVEL rate limiter
 		if route.RouteRateLimit.Type != "" && route.RouteRateLimit.Type != "none" {
 			route.RouteRateLimiter = ratelimit.New(
@@ -134,11 +228,14 @@ func assignRateLimiter(routes []*RouteConfig) {
 				route.RouteRateLimit.Capacity,
 				route.RouteRateLimit.RefillRate,
 			)
-		} else {
-			route.RouteRateLimiter = nil
+			if route.RouteRateLimiter == nil {
+				panic(fmt.Sprintf("failed to create route rate limiter for type '%s' on route %s %s", 
+					route.RouteRateLimit.Type, route.Method, route.Path))
+			}
 		}
 
-		// USER-LEVEL rate limiters
+		// USER-LEVEL rate limiters - initialize map for per-user instances
+		// Individual limiters are created on-demand in middleware
 		route.UserRateLimiter = sync.Map{}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"FluxGate/proxy"
 	"FluxGate/utils"
 	"context"
+	"log"
 	"net/http"
 	"time"
 )
@@ -55,11 +56,13 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// pick upstream
+	log.Printf("[gateway] incoming: %s %s for user=%s; matched route=%s", r.Method, r.URL.Path, userId, route.Path)
 	upstream, err := utils.PickHealthyServer(route.LoadBalancer, g.Breaker)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	log.Printf("[gateway] selected upstream %s for route %s", upstream, route.Path)
 
 	// put route + upstream into context
 	r = r.WithContext(context.WithValue(r.Context(), configuration.RouteCtxKey, route))
