@@ -36,6 +36,9 @@ type RouteConfig struct {
 	RouteRateLimiter ratelimit.RateLimiter `json:"-"` // single instance
 	UserRateLimiter  sync.Map              `json:"-"` // multiple instances
 
+	// Retry configuration (route-level)
+	Retry RetryConfig `json:"retry"`
+
 	Cache         CacheConfig       `json:"cache"`
 	CacheInstance *storage.LRUCache `json:"-"`
 
@@ -61,6 +64,12 @@ type UserRateLimitConfig struct {
 	Capacity   float64 `json:"capacity"`
 	RefillRate float64 `json:"refill_rate"`
 	Type       string  `json:"type"`
+}
+
+type RetryConfig struct {
+	Enabled    bool  `json:"enabled"`
+	MaxTries   int   `json:"max_tries"`
+	BaseTimeMs int64 `json:"base_time_ms"`
 }
 
 type UpstreamConfig struct {

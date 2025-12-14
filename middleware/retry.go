@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -26,7 +27,6 @@ type responseWriter struct {
 func RetryHandler(breakers map[string]*circuitbreaker.CircuitBreaker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Extract route from context
 			routeVal := r.Context().Value(configuration.RouteCtxKey)
 			if routeVal == nil {
 				next.ServeHTTP(w, r)
@@ -34,23 +34,18 @@ func RetryHandler(breakers map[string]*circuitbreaker.CircuitBreaker) func(http.
 			}
 			route := routeVal.(*configuration.RouteConfig)
 
-			var retryEnabled bool
-			var maxTries int
-			var baseDelay time.Duration
-			if len(route.Upstreams) > 0 {
-				firstUpstreamConfig := route.Upstreams[0]
-				retryEnabled = firstUpstreamConfig.RetryEnabled
-				maxTries = firstUpstreamConfig.Retries
-				baseDelay = time.Duration(firstUpstreamConfig.BaseTimeMs) * time.Millisecond
-			}
-
-			// If no retry config or retries disabled, just call next handler once
-			if !retryEnabled || maxTries <= 0 {
+			retryConfig := route.Retry
+			if !retryConfig.Enabled || retryConfig.MaxTries <= 0 {
+				upstream, err := utils.PickHealthyServer(route.LoadBalancer, breakers)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusServiceUnavailable)
+					return
+				}
+				r = r.WithContext(context.WithValue(r.Context(), configuration.UpstreamCtxKey, upstream))
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Read request body once
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -58,7 +53,9 @@ func RetryHandler(breakers map[string]*circuitbreaker.CircuitBreaker) func(http.
 			}
 			r.Body.Close()
 
-			// Retry loop
+			maxTries := retryConfig.MaxTries
+			baseDelay := time.Duration(retryConfig.BaseTimeMs) * time.Millisecond
+
 			for attempt := 0; attempt < maxTries; attempt++ {
 				upstream, err := utils.PickHealthyServer(route.LoadBalancer, breakers)
 				if err != nil {
@@ -75,31 +72,38 @@ func RetryHandler(breakers map[string]*circuitbreaker.CircuitBreaker) func(http.
 					header: http.Header{},
 				}
 
-				next.ServeHTTP(&responseWriter{ResponseWriter: w, capture: capture}, r)
-
-				lastStatus := capture.status
-				if lastStatus == 0 {
-					lastStatus = http.StatusOK
+				rw := &responseWriter{
+					ResponseWriter: w,
+					capture:        capture,
 				}
 
-				utils.UpdateCircuitBreaker(breakers[upstream], lastStatus)
+				log.Printf("[retry] attempt=%d upstream=%s", attempt+1, upstream)
+				next.ServeHTTP(rw, r)
 
-				if lastStatus < 500 {
-					// Copy headers and body to actual response writer
+				status := capture.status
+				if status == 0 {
+					status = http.StatusOK
+				}
+
+				utils.UpdateCircuitBreaker(breakers[upstream], status)
+
+				if status < 500 {
+					for k := range w.Header() {
+						w.Header().Del(k)
+					}
 					for k, vals := range capture.header {
 						for _, v := range vals {
 							w.Header().Add(k, v)
 						}
 					}
-					w.WriteHeader(lastStatus)
+					w.WriteHeader(status)
 					w.Write(capture.body.Bytes())
 					return
 				}
 
 				if attempt < maxTries-1 {
 					jitter := time.Duration(rand.Int63n(int64(25 * time.Millisecond)))
-					delay := baseDelay*(1<<attempt) + jitter
-					time.Sleep(delay)
+					time.Sleep(baseDelay*(1<<attempt) + jitter)
 				}
 			}
 
@@ -108,6 +112,14 @@ func RetryHandler(breakers map[string]*circuitbreaker.CircuitBreaker) func(http.
 	}
 }
 
-func (rw *responseWriter) Header() http.Header         { return rw.capture.header }
-func (rw *responseWriter) Write(b []byte) (int, error) { return rw.capture.body.Write(b) }
-func (rw *responseWriter) WriteHeader(code int)        { rw.capture.status = code }
+func (rw *responseWriter) Header() http.Header {
+	return rw.capture.header
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	return rw.capture.body.Write(b)
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.capture.status = code
+}

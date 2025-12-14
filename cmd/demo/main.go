@@ -48,55 +48,80 @@ func main() {
 	routes := []map[string]interface{}{
 		// fast route has two upstreams to demonstrate LB behavior
 		mergeMaps(map[string]interface{}{
-			"path":          "/fast",
-			"method":        "GET",
+			"path":           "/fast",
+			"method":         "GET",
 			"load_balancing": "round_robin",
 			"upstreams": []map[string]interface{}{
 				{"url": ups["fast"], "weight": 2},
 				{"url": ups["slow"], "weight": 1},
 			},
 			"cache": map[string]interface{}{"enabled": true, "ttl_ms": 60000, "max_entry": 100},
+			"retry": map[string]interface{}{
+				"enabled":      true,
+				"max_tries":    3,
+				"base_time_ms": 100,
+			},
 		}, commonRateLimit),
 		// slow-only
 		mergeMaps(map[string]interface{}{
-			"path":          "/slow",
-			"method":        "GET",
+			"path":           "/slow",
+			"method":         "GET",
 			"load_balancing": "round_robin",
 			"upstreams": []map[string]interface{}{
 				{"url": ups["slow"], "weight": 1},
 			},
 			"cache": map[string]interface{}{"enabled": false},
+			"retry": map[string]interface{}{
+				"enabled":      false,
+				"max_tries":    0,
+				"base_time_ms": 0,
+			},
 		}, commonRateLimit),
 		// faulty has two upstreams
 		mergeMaps(map[string]interface{}{
-			"path":          "/faulty",
-			"method":        "GET",
+			"path":           "/faulty",
+			"method":         "GET",
 			"load_balancing": "round_robin",
 			"upstreams": []map[string]interface{}{
 				{"url": ups["faulty30"], "weight": 1},
 				{"url": ups["faulty20"], "weight": 1},
 			},
 			"cache": map[string]interface{}{"enabled": false},
+			"retry": map[string]interface{}{
+				"enabled":      true,
+				"max_tries":    5,
+				"base_time_ms": 200,
+			},
 		}, commonRateLimit),
 		// echo can use echo and fast upstreams (multi-method)
 		mergeMaps(map[string]interface{}{
-			"path":          "/echo",
-			"method":        "GET",
+			"path":           "/echo",
+			"method":         "GET",
 			"load_balancing": "round_robin",
 			"upstreams": []map[string]interface{}{
 				{"url": ups["echo"], "weight": 2},
 				{"url": ups["fast"], "weight": 1},
 			},
 			"cache": map[string]interface{}{"enabled": true, "ttl_ms": 30000, "max_entry": 200},
+			"retry": map[string]interface{}{
+				"enabled":      true,
+				"max_tries":    2,
+				"base_time_ms": 50,
+			},
 		}, commonRateLimit),
 		mergeMaps(map[string]interface{}{
-			"path":          "/echo",
-			"method":        "POST",
+			"path":           "/echo",
+			"method":         "POST",
 			"load_balancing": "round_robin",
 			"upstreams": []map[string]interface{}{
 				{"url": ups["echo"], "weight": 1},
 			},
 			"cache": map[string]interface{}{"enabled": false},
+			"retry": map[string]interface{}{
+				"enabled":      true,
+				"max_tries":    3,
+				"base_time_ms": 100,
+			},
 		}, commonRateLimit),
 	}
 
