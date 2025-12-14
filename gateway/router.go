@@ -5,11 +5,9 @@ import (
 	"FluxGate/configuration"
 	"FluxGate/middleware"
 	"FluxGate/proxy"
-	"FluxGate/utils"
 	"context"
 	"log"
 	"net/http"
-	"time"
 )
 
 type Gateway struct {
@@ -55,38 +53,26 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// pick upstream
+	// put route into context
 	log.Printf("[gateway] incoming: %s %s for user=%s; matched route=%s", r.Method, r.URL.Path, userId, route.Path)
-	upstream, err := utils.PickHealthyServer(route.LoadBalancer, g.Breaker)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
-	}
-	log.Printf("[gateway] selected upstream %s for route %s", upstream, route.Path)
-
-	// put route + upstream into context
 	r = r.WithContext(context.WithValue(r.Context(), configuration.RouteCtxKey, route))
-	r = r.WithContext(context.WithValue(r.Context(), middleware.UpstreamCtxKey, upstream))
 
 	// build middleware chain
-	chain := g.wrapWithMiddlewares(proxyHandler)
+	// Cache -> RateLimiter -> RetryHandler -> ProxyHandler
+	// Cache and RateLimiter execute once per client request.
+	// RetryHandler handles retries, re-picks upstream on each attempt, checks circuit breaker and calls ProxyHandler
+	chain := g.wrapWithMiddlewares(proxy.ProxyHandler(g.Breaker))
 
 	// run the chain
 	chain.ServeHTTP(w, r)
 }
 
 func (g *Gateway) wrapWithMiddlewares(final http.Handler) http.Handler {
-	h := final
-	h = middleware.CacheMiddleware(g.Store)(h)
+	h := final // final is ProxyHandler
+
+	h = middleware.RetryHandler(g.Breaker)(h)
 	h = middleware.RateLimiter(h)
-	h = middleware.CircuitBreakerMiddleware(g.Breaker)(h)
+	h = middleware.CacheMiddleware(g.Store)(h)
 
 	return h
 }
-
-var proxyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	upstream := r.Context().Value(middleware.UpstreamCtxKey).(string)
-
-	timeout := 5 * time.Second
-	proxy.ReverseProxy(w, r, upstream, timeout,g.Breaker[upstream])
-})
