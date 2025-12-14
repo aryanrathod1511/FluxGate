@@ -1,11 +1,14 @@
 package proxy
 
 import (
+	"bytes"            
 	"context"
 	"io"
+	"math/rand"        
 	"net"
 	"net/http"
 	"time"
+	"FluxGate/configuration"
 )
 
 var transport = &http.Transport{
@@ -18,64 +21,112 @@ var transport = &http.Transport{
 
 var httpClient = &http.Client{
 	Transport: transport,
-	Timeout:   0,
+	Timeout:   0, // context controls timeout
 }
 
 // ReverseProxy forwards the request to the chosen upstream URL
-func ReverseProxy(w http.ResponseWriter, r *http.Request, upstreamURL string, timeout time.Duration) {
+func ReverseProxy(
+	w http.ResponseWriter,
+	r *http.Request,
+	upstreamURL string,
+	timeout time.Duration,
+) {
 
-	// set timeout
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
-	defer cancel()
-
-	// clone request
-	req, err := http.NewRequestWithContext(ctx, r.Method, upstreamURL, r.Body)
+	// read body
+	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	
+	route := r.Context().Value(configuration.RouteCtxKey).(*configuration.RouteConfig)
+
+	// find upstream index
+	indx := -1
+	for i, ups := range route.Upstreams {
+		if ups.URL == upstreamURL {
+			indx = i
+			break
+		}
+	}
+	if indx == -1 {
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 
-	// copy headers
-	for k, v := range r.Header {
-		for _, vv := range v {
-			req.Header.Add(k, vv)
-		}
-	}
+	maxTries := route.Upstreams[indx].Retries
+	baseDelay := time.Duration(route.Upstreams[indx].BaseTimeMs) * time.Millisecond
 
-	// add forwarding headers
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	req.Header.Set("X-Forwarded-For", host)
-	req.Header.Set("X-Forwarded-Host", r.Host)
-	req.Header.Set("X-Forwarded-Proto", r.URL.Scheme)
+	var resp *http.Response
 
-	// send upstream request
-	resp, err := httpClient.Do(req)
-	if err != nil {
+	for i := 0; i < maxTries; i++ {
 
-		// timeout
-		if ctx.Err() == context.DeadlineExceeded {
-			http.Error(w, "Gateway Timeout", http.StatusGatewayTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+
+		// recreate request
+		req, err := http.NewRequestWithContext(
+			ctx,
+			r.Method,
+			upstreamURL,
+			io.NopCloser(bytes.NewReader(bodyBytes)),
+		)
+		if err != nil {
+			cancel()
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 			return
 		}
 
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
+		// copy headers
+		for k, v := range r.Header {
+			for _, vv := range v {
+				req.Header.Add(k, vv)
+			}
+		}
 
-	// copy headers
+		// forwarding headers
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		req.Header.Set("X-Forwarded-For", host)
+		req.Header.Set("X-Forwarded-Host", r.Host)
+		req.Header.Set("X-Forwarded-Proto", r.URL.Scheme)
+
+		resp, err = httpClient.Do(req)
+		cancel()
+
+		// success
+		if err == nil && resp.StatusCode < 500 {
+			defer resp.Body.Close()
+			writeResponse(w, resp)
+			return
+		}
+
+		
+		if resp != nil {
+			resp.Body.Close()
+		}
+
+		if i == maxTries-1 {
+			break
+		}
+
+		// exponential backoff + jitter
+		jitter := time.Duration(rand.Int63n(int64(25 * time.Millisecond)))
+		time.Sleep(baseDelay*(1<<i) + jitter)
+	}
+
+	http.Error(w, "Bad Gateway", http.StatusBadGateway)
+}
+
+func writeResponse(w http.ResponseWriter, resp *http.Response) {
 	for k, vals := range resp.Header {
 		for _, v := range vals {
 			w.Header().Add(k, v)
 		}
 	}
-
-	// copy status
 	w.WriteHeader(resp.StatusCode)
-
-	// stream body
 	io.Copy(w, resp.Body)
 }

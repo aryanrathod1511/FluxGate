@@ -78,7 +78,7 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 func (g *Gateway) wrapWithMiddlewares(final http.Handler) http.Handler {
 	h := final
 	h = middleware.CacheMiddleware(g.Store)(h)
-	h = middleware.RateLimiter(h) // your RL middleware
+	h = middleware.RateLimiter(h)
 	h = middleware.CircuitBreakerMiddleware(g.Breaker)(h)
 
 	return h
@@ -88,5 +88,5 @@ var proxyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request)
 	upstream := r.Context().Value(middleware.UpstreamCtxKey).(string)
 
 	timeout := 5 * time.Second
-	proxy.ReverseProxy(w, r, upstream, timeout)
+	proxy.ReverseProxy(w, r, upstream, timeout,g.Breaker[upstream])
 })

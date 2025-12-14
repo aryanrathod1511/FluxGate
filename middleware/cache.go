@@ -22,7 +22,10 @@ func CacheMiddleware(store *configuration.GatewayConfigStore) func(http.Handler)
 				return
 			}
 
-			key := r.Method + ":" + r.URL.Path + "?" + r.URL.RawQuery
+			key := r.Method + ":" + r.URL.Path
+			if r.URL.RawQuery != "" {
+				key += "?" + r.URL.RawQuery
+			}
 
 			// check cache
 			if entry, ok := cache.Get(key); ok {
