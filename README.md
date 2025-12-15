@@ -220,8 +220,8 @@ In the demo (`cmd/demo/main.go`), similar configs are built programmatically for
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd API_gateway
+git clone https://github.com/aryanrathod1511/FluxGate
+cd FluxGate
 ```
 
 ### 2. Run the gateway demo
