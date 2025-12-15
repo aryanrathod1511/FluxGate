@@ -9,6 +9,7 @@ import (
 
 	"FluxGate/configuration"
 	"FluxGate/gateway"
+	metrics "FluxGate/matrics"
 	"FluxGate/testservers"
 )
 
@@ -133,6 +134,7 @@ func main() {
 	}
 
 	gw := gateway.NewGateway(store)
+	metrics.StartFlusher("bench_metrics.jsonl")
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	http.HandleFunc("/", gw.Handler)

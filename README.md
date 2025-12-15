@@ -1,116 +1,167 @@
 # FluxGate - High-Performance API Gateway
 
-A high-performance API Gateway built in Go with routing, load balancing, rate limiting, circuit breaking, caching, and extensible plugin architecture.
+FluxGate is a **high-performance, production-inspired API Gateway** built in Go, designed to handle real-world traffic patterns and failure modes—not just happy paths.
 
-## 🚀 Features
+It focuses on **core gateway responsibilities**:
+- Routing
+- Load balancing
+- Rate limiting
+- Circuit breaking
+- Response caching
+- Retries
+- Latency and cache metrics
 
-### ✅ Implemented Features
+The goal isn’t to wrap an existing proxy or ship a full production product.  
+The goal is to **understand and demonstrate real system trade-offs**—latency vs throughput, cache warm-up, tail behavior (p99), retries under load, and how gateways actually behave under concurrency.
 
-- **🔀 Intelligent Routing**
-  - Path-based routing with HTTP method matching
-  - Wildcard and parameter support (`:param`, `{param}`, `*`)
-  - Route scoring for best match selection
-  - Per-user route configuration
-
-- **⚖️ Load Balancing**
-  - Round Robin algorithm
-  - Weighted Round Robin algorithm
-  - Extensible load balancer registry
-  - Automatic unhealthy server detection via circuit breakers
-
-- **🚦 Rate Limiting**
-  - Token Bucket algorithm implementation
-  - Route-level rate limiting
-  - User-level rate limiting
-  - Flexible user identification (headers, query params, cookies, JWT, IP, etc.)
-  - Extensible rate limiter registry
-
-- **🔌 Circuit Breaking**
-  - Three-state circuit breaker (Closed, Open, Half-Open)
-  - Configurable failure thresholds
-  - Time-based window for failure tracking
-  - Automatic recovery with half-open state
-  - Per-upstream circuit breaker instances
-
-- **💾 Response Caching**
-  - LRU (Least Recently Used) cache implementation
-  - Configurable TTL (Time To Live)
-  - Per-route cache configuration
-  - Automatic cache eviction
-
-- **🔄 Reverse Proxy**
-  - HTTP/HTTPS reverse proxy
-  - Request/response header forwarding
-  - X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto headers
-  - Configurable request timeouts
-
-### 🚧 Planned Features
-
-- **🔄 Retries**
-  - Automatic retry with exponential backoff
-  - Configurable retry attempts and base time
-  - Retry on specific HTTP status codes
-
-- **🔌 Plugin System**
-  - Extensible middleware plugin architecture
-  - Custom plugin registration
-  - Plugin execution pipeline
-
-## 📋 Table of Contents
-
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Architecture](#architecture)
-- [Roadmap](#-planned-features)
+FluxGate is opinionated, measurable, and intentionally transparent about what works, what breaks, and why.
 
 
-## 🛠️ Installation
+---
 
-### Prerequisites
+## 🌟 Key Features
 
-- Go 1.23.3 or higher
-- Git
+### 🔀 Routing
+- **Path-based routing** with HTTP method matching
+- Supports **parameters** (e.g. `:id`, `{id}`) and **wildcards** (`*`)
+- **Route scoring** to select the most specific match
+- Per-user / per-tenant route configuration (e.g. `demo` user)
 
-### Build from Source
+### ⚖️ Load Balancing
+- **Round-robin** load balancer
+- **Weighted round-robin** implementation available
+- Per-route load balancer instances
+- Integrates with circuit breakers to avoid unhealthy upstreams
+
+### 🚦 Rate Limiting
+- **Token bucket** algorithm
+- **Route-level** and **user-level** limits
+- Flexible user identification via:
+  - Headers
+  - Query params
+  - Cookies
+  - Form fields
+  - Basic auth
+  - JWT token
+  - IP address
+- Registry-based design for adding new limiter types
+
+> Note: In the demo setup, configuration is constructed in-memory but the design supports JSON-based configuration.
+
+### 🔌 Circuit Breaker
+- Three-state model: **Closed → Open → Half-Open**
+- Configurable:
+  - Failure threshold
+  - Sliding time window
+  - Open duration
+  - Half‑open trial limit
+  - Success threshold for recovery
+- Per-upstream breaker instances keyed by upstream URL
+
+### 💾 Response Caching
+- In-memory **LRU cache** per route
+- Configurable TTL and maximum entries
+- Cache key built from **HTTP method + path + query**
+- Only **HTTP 200** responses are cached
+- Exposes cache warm-up and stampede behavior under load
+
+### 🔁 Resilient Retries
+- Middleware-driven **retry handler** with exponential backoff + jitter
+- Retries on **5xx** or network failures
+- Per-route configuration:
+  - Enabled/disabled
+  - Max tries
+  - Base backoff duration
+- Re-picks healthy upstreams on each retry using load balancer + circuit breakers
+
+### 🔄 Reverse Proxy
+- HTTP **reverse proxy** to upstream services
+- Request/response header forwarding
+- `X-Forwarded-*` headers support
+- Context-driven per-request timeout
+
+### 📊 Metrics & Observability
+- Per-second aggregation of:
+  - Total requests
+  - Cache hits & misses
+  - Latency histogram over fixed buckets
+- **p95 latency** and cache hit ratio computed continuously
+- Metrics are flushed to a JSONL file (e.g. `bench_metrics.jsonl`) for offline analysis
+
+---
+
+## 📊 Performance Benchmark (Cache vs No Cache)
+
+This benchmark compares gateway behavior **with and without response caching** under identical load.
+
+### 🔧 Test Setup
+- Load tool: `wrk`
+- Command:
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd API_gateway
-
-# Build the gateway
-go build -o fluxgate ./cmd/demo
-
-# Run the gateway
-./fluxgate
+wrk -t4 -c4 -d30s --latency -s hdr.lua http://localhost:8080/slow
 ```
 
-## 🚀 Quick Start
+- Upstream behavior: artificial delay of ~800 ms
+- Environment: localhost
+- Gateway restarted before each run
 
-1. **Start the gateway demo:**
+### 📈 Results (Representative)
 
-```bash
-go run ./cmd/demo/main.go
+| Metric                    | Without Cache | With Cache |
+|---------------------------|--------------:|-----------:|
+| Requests/sec              |          ~10  |   ~17,283 |
+| Total Requests (30s)      |         ~300  |  ~518,779 |
+| Avg Latency               |      ~399 ms  |    ~4.8 ms |
+| p50 Latency               |      ~402 ms  |   ~0.18 ms |
+| p75 Latency               |      ~802 ms  |   ~0.33 ms |
+| p90 Latency               |      ~803 ms  |   ~0.72 ms |
+| p99 Latency               |      ~805 ms  |     ~81 ms |
+| Max Latency               |      ~808 ms  |    ~802 ms |
+| Dominant Path             |    Upstream   |   Cache    |
+
+**Takeaway:** caching removes the slow upstream from the critical path, yielding **orders-of-magnitude higher throughput** and shifting median latency from hundreds of milliseconds to **sub-millisecond** levels. Tail latency reflects rare cache misses (warm-up / expiry).
+
+---
+
+## 🏗️ Architecture Overview
+
+### High-Level Request Flow
+
+```text
+Client
+  ↓
+Gateway HTTP handler
+  ↓
+Route matching (user + path + method)
+  ↓
+Middleware chain
+  ├─ Circuit breaker / upstream health selection
+  ├─ Rate limiting (route + user)
+  ├─ Cache lookup
+  ├─ Retry handler (with backoff)
+  ↓
+Load balancer → Upstream selection
+  ↓
+Reverse proxy → Upstream service
+  ↓
+Response (optionally cached)
 ```
 
-The gateway will start on `http://localhost:8080` and automatically start test upstream servers.
+### Design Principles
 
-2. **Test the gateway:**
+- **Short-circuit early**: rate limiting, circuit breaking, and caching try to fail fast or serve from memory
+- **Tail latency first**: p95 and higher percentiles are emphasized, not just averages
+- **In-memory state**: makes concurrency effects and bottlenecks explicit & observable
+- **Composable pieces**: routing, LB, rate limiting, caching, and retry are pluggable concepts
 
-```bash
-# Make a request with user identification header
-curl -H "X-User-ID: demo" http://localhost:8080/fast
+---
 
-# Check health endpoint
-curl http://localhost:8080/health
-```
+## ⚙️ Configuration Model
 
-## ⚙️ Configuration
+Although the demo builds configuration in Go, the design centers on **JSON-based per-user configuration**.
 
-The gateway uses JSON-based configuration. Each user can have their own set of routes.
-
-### Route Configuration Structure
+### Example Route Configuration (Conceptual)
 
 ```json
 {
@@ -121,9 +172,6 @@ The gateway uses JSON-based configuration. Each user can have their own set of r
     {
       "url": "http://localhost:9001",
       "weight": 2,
-      "retry_enabled": false,
-      "retries": 3,
-      "base_time_ms": 100,
       "circuit_breaker": {
         "enabled": true,
         "failure_threshold": 5,
@@ -136,13 +184,13 @@ The gateway uses JSON-based configuration. Each user can have their own set of r
   ],
   "route_rate_limit": {
     "type": "token_bucket",
-    "capacity": 100.0,
-    "refill_rate": 10.0
+    "capacity": 100,
+    "refill_rate": 10
   },
   "user_rate_limit": {
     "type": "token_bucket",
-    "capacity": 20.0,
-    "refill_rate": 2.0
+    "capacity": 20,
+    "refill_rate": 2
   },
   "user_id_key": ["header:X-User-ID", "ip"],
   "cache": {
@@ -150,196 +198,106 @@ The gateway uses JSON-based configuration. Each user can have their own set of r
     "ttl_ms": 60000,
     "max_entry": 100
   },
-  "plugins": []
+  "retry": {
+    "enabled": true,
+    "max_tries": 3,
+    "base_time_ms": 100
+  }
 }
 ```
 
-### Configuration Fields
-
-#### Route Configuration
-
-| Field | Type | Description | Required |
-|-------|------|-------------|----------|
-| `path` | string | Route path pattern (supports wildcards and parameters) | Yes |
-| `method` | string | HTTP method (GET, POST, PUT, DELETE, etc.) | Yes |
-| `load_balancing` | string | Load balancing algorithm (`round_robin`, `weighted_rr`) | Yes |
-| `upstreams` | array | List of upstream server configurations | Yes |
-| `route_rate_limit` | object | Route-level rate limiting configuration | No |
-| `user_rate_limit` | object | User-level rate limiting configuration | No |
-| `user_id_key` | array | User identification methods (see below) | No |
-| `cache` | object | Caching configuration | No |
-| `plugins` | array | Plugin names (planned feature) | No |
-
-#### Upstream Configuration
-
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `url` | string | Upstream server URL | - |
-| `weight` | int | Weight for weighted round-robin | 1 |
-| `retry_enabled` | bool | Enable retries (planned) | false |
-| `retries` | int | Number of retry attempts (planned) | 0 |
-| `base_time_ms` | int64 | Base retry delay in milliseconds (planned) | 0 |
-| `circuit_breaker` | object | Circuit breaker configuration | - |
-
-#### Circuit Breaker Configuration
-
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `enabled` | bool | Enable circuit breaker | false |
-| `failure_threshold` | int | Number of failures to open circuit | 5 |
-| `window_seconds` | int | Time window for counting failures | 60 |
-| `open_seconds` | int | Duration to keep circuit open | 30 |
-| `half_open_requests` | int | Max concurrent requests in half-open state | 3 |
-| `success_threshold` | int | Successes needed to close from half-open | 2 |
-
-#### Rate Limit Configuration
-
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `type` | string | Rate limiter type (`token_bucket`, `none`) | `none` |
-| `capacity` | float64 | Maximum tokens (burst capacity) | 0 |
-| `refill_rate` | float64 | Tokens refilled per second | 0 |
-
-#### Cache Configuration
-
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `enabled` | bool | Enable caching | false |
-| `ttl_ms` | int | Time-to-live in milliseconds | 0 |
-| `max_entry` | int | Maximum cache entries (LRU eviction) | 100 |
-
-### User Identification
-
-The `user_id_key` field supports multiple identification methods:
-
-- `header:X-User-ID` - Extract from HTTP header
-- `query:uid` - Extract from query parameter
-- `cookie:session_id` - Extract from cookie
-- `form:user_id` - Extract from form data
-- `jwt:sub` - Extract from JWT token (Authorization header)
-- `basic:username` - Extract from Basic Auth username
-- `ip` - Use client IP address
-
-The gateway tries each method in order until it finds a value.
-
-### Path Matching
-
-Routes support flexible path matching:
-
-- **Exact match**: `/api/users`
-- **Parameters**: `/api/users/:id` or `/api/users/{id}`
-- **Wildcards**: `/api/*` (matches any path starting with `/api/`)
-
-Routes are scored, and the most specific match is selected.
-
-## 🏗️ Architecture
-
-### Project Structure
-
-```
-API_gateway/
-├── cmd/
-│   └── demo/
-│       └── main.go              # Demo application entry point
-├── gateway/
-│   ├── server.go                # Gateway server implementation
-│   └── router.go                # Routing logic
-├── configuration/
-│   ├── config.go                # Configuration structures
-│   └── store.go                 # Configuration store and matching
-├── loadbalancer/
-│   ├── loadBalancer.go          # Load balancer interface
-│   ├── factory.go               # Load balancer factory
-│   ├── registry.go              # Load balancer registry
-│   ├── round_robin.go           # Round robin implementation
-│   └── weighted_rr.go           # Weighted round robin implementation
-├── ratelimit/
-│   ├── ratelimiter.go           # Rate limiter interface
-│   ├── factory.go               # Rate limiter factory
-│   ├── registry.go              # Rate limiter registry
-│   └── token_bucket.go          # Token bucket implementation
-├── circuitbreaker/
-│   └── circuitbreaker.go        # Circuit breaker implementation
-├── middleware/
-│   ├── rate_limiter.go          # Rate limiting middleware
-│   ├── cache.go                 # Caching middleware
-│   └── breaker.go                # Circuit breaker middleware
-├── proxy/
-│   └── reverse_proxy.go         # Reverse proxy implementation
-├── storage/
-│   └── cache.go                 # LRU cache implementation
-├── utils/
-│   └── pick_healthy_server.go   # Healthy server selection
-└── testservers/
-    └── servers.go               # Test upstream servers
-```
-
-### Request Flow
-
-```
-Client Request
-    ↓
-Gateway Handler
-    ↓
-Route Matching (by user, path, method)
-    ↓
-Load Balancer (select healthy upstream)
-    ↓
-Middleware Chain:
-    ├─ Circuit Breaker Middleware
-    ├─ Rate Limiter Middleware (route + user)
-    └─ Cache Middleware
-    ↓
-Reverse Proxy (forward to upstream)
-    ↓
-Response (with caching if applicable)
-```
-
-### Extensibility
-
-The gateway uses a registry pattern for extensibility:
-
-- **Load Balancers**: Register custom algorithms via `loadbalancer.RegistrLoadBalancer()`
-- **Rate Limiters**: Register custom algorithms via `ratelimit.RegisterRateLimiter()`
-- **Plugins**: Plugin system infrastructure (planned)
-
-
-
-## 🎯 Planned Features
-
-- [ ] **Retry Mechanism**
-  - Exponential backoff
-  - Configurable retry attempts
-  - Retry on specific status codes
-
-- [ ] **Plugin System**
-  - Plugin interface definition
-  - Plugin registration and execution
-  - Built-in plugins (auth, logging, transformation)
-
-- [ ] **Additional Load Balancers**
-  - Least connections
- 
-
-- [ ] **Additional Rate Limiters**
-  - Sliding window
-  - Fixed window
-  - Leaky bucket
-
-- [ ] **Observability**
-  - Metrics export (Prometheus)
-  - Structured logging
-
-- [ ] **Security**
-  - JWT validation
-  - API key authentication
-  - CORS support
-
-- [ ] **Configuration Management**
-  - File-based configuration
-  - Hot reload
-  - Configuration validation
+In the demo (`cmd/demo/main.go`), similar configs are built programmatically for routes like `/fast`, `/slow`, `/faulty`, and `/echo`.
 
 ---
 
-**Note**: This is an active development project. Some features (retries, plugin system and Observability) are planned but not yet implemented.
+## 🛠️ Running the Demo Locally
+
+### Prerequisites
+
+- **Go** 1.23+
+- **Git**
+
+### 1. Clone the repository
+
+```bash
+git clone <your-repo-url>
+cd API_gateway
+```
+
+### 2. Run the gateway demo
+
+```bash
+go run ./cmd/demo/main.go
+```
+
+- The gateway starts on **`http://localhost:8080`**.
+- Test upstream services are started automatically on ports `9001–9005`.
+
+### 3. Try a few requests
+
+Use the `X-User-ID` header (the demo config expects `demo`):
+
+```bash
+curl -H "X-User-ID: demo" http://localhost:8080/fast
+curl -H "X-User-ID: demo" http://localhost:8080/slow
+curl -H "X-User-ID: demo" http://localhost:8080/faulty
+curl -H "X-User-ID: demo" http://localhost:8080/echo
+curl -H "X-User-ID: demo" -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"msg":"hello"}' \
+  http://localhost:8080/echo
+```
+
+### 4. Run the latency benchmark (optional)
+
+Make sure the gateway is running, then:
+
+```bash
+wrk -t4 -c4 -d30s --latency -s hdr.lua http://localhost:8080/slow
+```
+
+Metrics will be flushed to `bench_metrics.jsonl` in the project root.
+
+---
+
+## 📁 Project Structure
+
+- `cmd/demo/` — Demo entry point; wires configs and starts gateway + test servers
+- `gateway/` — Core gateway HTTP handler and middleware composition
+- `configuration/` — Route configuration models, JSON loading, and route matching
+- `loadbalancer/` — Load balancer interfaces and implementations (round-robin, weighted RR)
+- `ratelimit/` — Rate limiter registry and token bucket implementation
+- `circuitbreaker/` — Circuit breaker implementation and state machine
+- `middleware/` — Cache, rate limiting, and retry middleware
+- `proxy/` — Reverse proxy and HTTP transport logic
+- `storage/` — In-memory LRU cache implementation
+- `matrics/` — (metrics) aggregation, p95 calculation, periodic flushing
+- `testservers/` — Local upstream servers (fast, slow, faulty, echo) for experiments
+- `hdr.lua` — `wrk` script for latency histogram / headers-based benchmarking
+
+---
+
+## 🚧 Status, Limitations & Next Steps
+
+### Current Status
+
+FluxGate is **experimental / educational** and designed for local testing and benchmarking.
+
+### Known Limitations
+
+- **In-memory only**:
+  - No distributed cache
+  - No shared rate limiting across processes
+- **No TLS termination** (expects to sit behind a TLS-terminating proxy/load balancer)
+- **No persistent configuration store** (configs are built in-code or would be loaded from local JSON)
+- **Non-Prometheus metrics**: metrics are exported as JSONL, not Prometheus out of the box
+
+### Potential Future Work 💡
+
+- Prometheus / OpenTelemetry exporters for metrics
+- Pluggable **middleware/plugin system** for custom behaviors
+- Hot-reloadable configuration from file or remote store
+- Additional load-balancing and rate-limiting strategies (e.g. least connections, leaky bucket)
+- More advanced cache policies (e.g. request coalescing, stale-while-revalidate)
+
+---

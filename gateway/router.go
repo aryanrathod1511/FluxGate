@@ -3,11 +3,13 @@ package gateway
 import (
 	"FluxGate/circuitbreaker"
 	"FluxGate/configuration"
+	metrics "FluxGate/matrics"
 	"FluxGate/middleware"
 	"FluxGate/proxy"
 	"context"
 	"log"
 	"net/http"
+	"time"
 )
 
 type Gateway struct {
@@ -40,6 +42,7 @@ func NewGateway(store *configuration.GatewayConfigStore) *Gateway {
 }
 
 func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
 	userId := r.Header.Get("X-User-ID")
 	if userId == "" {
 		http.Error(w, "Missing X-User-ID header", http.StatusBadRequest)
@@ -65,13 +68,15 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 
 	// run the chain
 	chain.ServeHTTP(w, r)
+	latencyMs := time.Since(startTime).Milliseconds()
+	metrics.RecordLatency(latencyMs)
 }
 
 func (g *Gateway) wrapWithMiddlewares(final http.Handler) http.Handler {
 	h := final // final is ProxyHandler
 
 	h = middleware.RetryHandler(g.Breaker)(h)
-	h = middleware.RateLimiter(h)
+	//h = middleware.RateLimiter(h)
 	h = middleware.CacheMiddleware(g.Store)(h)
 
 	return h
