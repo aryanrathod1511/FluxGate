@@ -135,13 +135,12 @@ Gateway HTTP handler
   ↓
 Route matching (user + path + method)
   ↓
+Load balancer → Upstream selection
 Middleware chain
   ├─ Circuit breaker / upstream health selection
   ├─ Rate limiting (route + user)
   ├─ Cache lookup
   ├─ Retry handler (with backoff)
-  ↓
-Load balancer → Upstream selection
   ↓
 Reverse proxy → Upstream service
   ↓
