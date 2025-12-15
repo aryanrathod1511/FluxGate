@@ -5,7 +5,6 @@ import (
 	"FluxGate/ratelimit"
 	"FluxGate/storage"
 	"sync"
-	"time"
 )
 
 type GatewayConfigStore struct {
@@ -93,7 +92,7 @@ type CircuitBreakerConfig struct {
 }
 
 type CacheConfig struct {
-	Enabled  bool          `json:"enabled"`
-	TTL      time.Duration `json:"ttl_ms"`
-	MaxEntry int           `json:"max_entry"`
+	Enabled  bool  `json:"enabled"`
+	TTL      int64 `json:"ttl_ms"`
+	MaxEntry int   `json:"max_entry"`
 }

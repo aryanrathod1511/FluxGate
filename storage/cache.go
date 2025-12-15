@@ -36,6 +36,10 @@ func NewLRUCache(capacity int, ttl time.Duration) *LRUCache {
 	}
 }
 
+func (c *LRUCache) Size() int {
+	return c.ll.Len()
+}
+
 func (c *LRUCache) Get(key string) (CacheEntry, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -56,7 +60,6 @@ func (c *LRUCache) Get(key string) (CacheEntry, bool) {
 
 	// move to front (most recently used)
 	c.ll.MoveToFront(elem)
-
 	return item.entry, true
 }
 

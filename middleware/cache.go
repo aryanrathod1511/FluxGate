@@ -4,6 +4,7 @@ import (
 	"FluxGate/configuration"
 	"FluxGate/storage"
 	"bytes"
+	"log"
 	"net/http"
 	"time"
 )
@@ -13,7 +14,6 @@ func CacheMiddleware(store *configuration.GatewayConfigStore) func(http.Handler)
 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			// extract route from context
 			route := r.Context().Value(configuration.RouteCtxKey).(*configuration.RouteConfig)
 
 			cache := route.CacheInstance
@@ -27,16 +27,20 @@ func CacheMiddleware(store *configuration.GatewayConfigStore) func(http.Handler)
 				key += "?" + r.URL.RawQuery
 			}
 
-			// check cache
+			// cache hit
 			if entry, ok := cache.Get(key); ok {
+				log.Printf("[cache] hit for key: %s", key)
 				for hk, vals := range entry.Header {
 					for _, v := range vals {
 						w.Header().Add(hk, v)
 					}
 				}
+				w.WriteHeader(http.StatusOK)
 				w.Write(entry.Body)
 				return
 			}
+
+			log.Printf("[cache] miss for key: %s", key)
 
 			// capture response
 			rec := &responseRecorder{
@@ -46,12 +50,13 @@ func CacheMiddleware(store *configuration.GatewayConfigStore) func(http.Handler)
 
 			next.ServeHTTP(rec, r)
 
-			// only cache 200 responses
+			// cache only 200 OK
 			if rec.status == http.StatusOK {
+				ttlDur := time.Duration(route.Cache.TTL) * time.Millisecond
 				cache.Set(key, storage.CacheEntry{
 					Body:       rec.body.Bytes(),
 					Header:     rec.header.Clone(),
-					ExpiryTime: time.Now().Add(route.Cache.TTL),
+					ExpiryTime: time.Now().Add(ttlDur),
 				})
 			}
 		})
@@ -72,4 +77,8 @@ func (r *responseRecorder) Header() http.Header {
 func (r *responseRecorder) Write(b []byte) (int, error) {
 	r.body.Write(b)
 	return len(b), nil
+}
+
+func (r *responseRecorder) WriteHeader(code int) {
+	r.status = code
 }

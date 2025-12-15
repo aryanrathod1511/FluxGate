@@ -70,7 +70,7 @@ func main() {
 			"upstreams": []map[string]interface{}{
 				{"url": ups["slow"], "weight": 1},
 			},
-			"cache": map[string]interface{}{"enabled": false},
+			"cache": map[string]interface{}{"enabled": true, "ttl_ms": 60000, "max_entry": 50},
 			"retry": map[string]interface{}{
 				"enabled":      false,
 				"max_tries":    0,
@@ -116,7 +116,7 @@ func main() {
 			"upstreams": []map[string]interface{}{
 				{"url": ups["echo"], "weight": 1},
 			},
-			"cache": map[string]interface{}{"enabled": false},
+			"cache": map[string]interface{}{"enabled": true, "ttl_ms": 30000, "max_entry": 200},
 			"retry": map[string]interface{}{
 				"enabled":      true,
 				"max_tries":    3,
