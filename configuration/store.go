@@ -6,7 +6,6 @@ import (
 	"FluxGate/storage"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -55,7 +54,6 @@ func (store *GatewayConfigStore) LoadConfig(userId string, configData []byte) er
 	assignCacheInstances(routes)
 
 	store.Users[userId] = routes
-	log.Printf("Loaded %d routes for user: %s", len(routes), userId)
 	return nil
 }
 

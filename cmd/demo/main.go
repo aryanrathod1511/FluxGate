@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
+	"runtime"
 	"time"
 
 	"FluxGate/configuration"
@@ -30,6 +32,8 @@ func main() {
 	for k, v := range ups {
 		log.Printf("started upstream %s -> %s", k, v)
 	}
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
 
 	// common rate limiting configuration for all routes
 	commonRateLimit := map[string]interface{}{
@@ -141,6 +145,12 @@ func main() {
 
 	srv := &http.Server{Addr: ":8080", ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 	fmt.Println("Gateway demo running on :8080 — use X-User-ID: demo header")
+
+	go func() {
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			log.Fatalf("failed to start pprof server: %v", err)
+		}
+	}()
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("gateway failed: %v", err)
 	}

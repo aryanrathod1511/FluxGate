@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -67,18 +66,14 @@ func ReverseProxy(
 	req.Header.Set("X-Forwarded-Host", r.Host)
 	req.Header.Set("X-Forwarded-Proto", r.URL.Scheme)
 
-	log.Printf("[proxy] forwarding %s %s -> %s", r.Method, r.URL.RequestURI(), upstreamURL)
 	resp, err := httpClient.Do(req)
 	cancel()
 	if err != nil {
 		// Network/connection error - will be retried by RetryHandler if appropriate
-		log.Printf("[proxy] request to upstream %s failed: %v", upstreamURL, err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
-
-	log.Printf("[proxy] upstream %s responded %d", upstreamURL, resp.StatusCode)
 
 	// Write response regardless of status code
 	// RetryHandler will decide whether to retry based on status code

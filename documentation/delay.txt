@@ -1,0 +1,14 @@
+Showing nodes accounting for 163.94s, 100% of 163.94s total
+Dropped 74 nodes (cum <= 0.82s)
+Showing top 10 nodes out of 21
+      flat  flat%   sum%        cum   cum%
+   157.35s 95.98% 95.98%    157.35s 95.98%  sync.(*Mutex).Unlock (partial-inline)
+     6.59s  4.02%   100%      6.59s  4.02%  runtime._LostContendedRuntimeLock
+         0     0%   100%    141.95s 86.59%  FluxGate/gateway.(*Gateway).Handler
+         0     0%   100%    141.95s 86.59%  FluxGate/gateway.(*Gateway).Handler-fm
+         0     0%   100%    133.08s 81.18%  FluxGate/gateway.(*Gateway).wrapWithMiddlewares.(*Gateway).wrapWithMiddlewares.CacheMiddleware.func3.func4
+         0     0%   100%     52.75s 32.18%  FluxGate/matrics.RecordCacheHit
+         0     0%   100%      8.87s  5.41%  FluxGate/matrics.RecordLatency
+         0     0%   100%     11.68s  7.12%  FluxGate/matrics.StartFlusher.func1
+         0     0%   100%     11.67s  7.12%  FluxGate/matrics.flush
+         0     0%   100%     80.19s 48.91%  FluxGate/storage.(*LRUCache).Get

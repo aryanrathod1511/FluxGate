@@ -1,0 +1,33 @@
+WITH CACHING:
+
+Running 30s test @ http://localhost:8080/slow
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    14.77ms   81.16ms 965.41ms   97.85%
+    Req/Sec     8.18k     2.02k   12.58k    70.36%
+  Latency Distribution
+     50%    2.81ms
+     75%    5.66ms
+     90%    9.90ms
+     99%  535.69ms
+  951669 requests in 30.04s, 405.65MB read
+Requests/sec:  31682.92
+Transfer/sec:     13.51MB
+
+
+
+WITHOUT CACHING:
+
+Running 30s test @ http://localhost:8080/slow
+  4 threads and 100 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   813.96ms   28.61ms   1.03s    94.39%
+    Req/Sec    43.23     35.57   230.00     77.65%
+  Latency Distribution
+     50%  805.18ms
+     75%  811.84ms
+     90%  827.72ms
+     99%  977.66ms
+  3634 requests in 30.10s, 1.55MB read
+Requests/sec:    120.73
+Transfer/sec:     52.69KB

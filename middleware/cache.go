@@ -5,7 +5,6 @@ import (
 	metrics "FluxGate/matrics"
 	"FluxGate/storage"
 	"bytes"
-	"log"
 	"net/http"
 	"time"
 )
@@ -31,7 +30,6 @@ func CacheMiddleware(store *configuration.GatewayConfigStore) func(http.Handler)
 			// cache hit
 			if entry, ok := cache.Get(key); ok {
 				metrics.RecordCacheHit()
-				log.Printf("[cache] hit for key: %s", key)
 				for hk, vals := range entry.Header {
 					for _, v := range vals {
 						w.Header().Add(hk, v)
@@ -42,7 +40,6 @@ func CacheMiddleware(store *configuration.GatewayConfigStore) func(http.Handler)
 				return
 			}
 
-			log.Printf("[cache] miss for key: %s", key)
 			metrics.RecordCacheMiss()
 
 			// capture response

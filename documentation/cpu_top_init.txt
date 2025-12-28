@@ -1,0 +1,24 @@
+Showing nodes accounting for 22.78s, 52.93% of 43.04s total
+Dropped 505 nodes (cum <= 0.22s)
+Showing top 20 nodes out of 172
+      flat  flat%   sum%        cum   cum%
+    15.06s 34.99% 34.99%     15.06s 34.99%  internal/runtime/syscall.Syscall6
+     1.06s  2.46% 37.45%      4.85s 11.27%  runtime.mallocgc
+     0.71s  1.65% 39.10%      0.85s  1.97%  runtime.(*mspan).writeHeapBitsSmall
+     0.59s  1.37% 40.47%      0.59s  1.37%  runtime.nextFreeFast (inline)
+     0.56s  1.30% 41.78%      0.56s  1.30%  time.Now
+     0.55s  1.28% 43.05%      0.67s  1.56%  runtime.mapiternext
+     0.49s  1.14% 44.19%      0.49s  1.14%  runtime.nanotime (partial-inline)
+     0.46s  1.07% 45.26%      0.46s  1.07%  indexbytebody
+     0.34s  0.79% 46.05%      0.34s  0.79%  net/textproto.validHeaderFieldByte (inline)
+     0.31s  0.72% 46.77%      0.37s  0.86%  runtime.casgstatus
+     0.30s   0.7% 47.47%      0.30s   0.7%  runtime.memclrNoHeapPointers
+     0.29s  0.67% 48.14%      0.46s  1.07%  runtime.mapaccess1_faststr
+     0.28s  0.65% 48.79%      0.78s  1.81%  net/textproto.CanonicalMIMEHeaderKey
+     0.28s  0.65% 49.44%      0.31s  0.72%  runtime.findObject
+     0.28s  0.65% 50.09%      0.28s  0.65%  runtime.memmove
+     0.27s  0.63% 50.72%      0.27s  0.63%  aeshashbody
+     0.27s  0.63% 51.35%     38.55s 89.57%  net/http.(*conn).serve
+     0.24s  0.56% 51.91%      1.48s  3.44%  net/http.Header.writeSubset
+     0.22s  0.51% 52.42%      1.08s  2.51%  internal/poll.runtime_pollSetDeadline
+     0.22s  0.51% 52.93%      1.82s  4.23%  internal/poll.setDeadlineImpl

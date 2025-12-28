@@ -3,7 +3,6 @@ package middleware
 import (
 	"FluxGate/configuration"
 	"FluxGate/ratelimit"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -21,7 +20,7 @@ func RateLimiter(next http.Handler) http.Handler {
 		route := val.(*configuration.RouteConfig)
 
 		if route.RouteRateLimiter == nil {
-			log.Printf("NO ratelimiter found")
+			// no route rate limiter configured
 		}
 
 		if route.RouteRateLimiter != nil {
@@ -29,7 +28,6 @@ func RateLimiter(next http.Handler) http.Handler {
 				http.Error(w, "route limit exceeded", http.StatusTooManyRequests)
 				return
 			}
-			log.Printf("[rate_limiter] route limit passed for %s %s", r.Method, r.URL.Path)
 		}
 
 		// Identify user

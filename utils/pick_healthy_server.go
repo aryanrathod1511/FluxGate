@@ -4,7 +4,6 @@ import (
 	"FluxGate/circuitbreaker"
 	"FluxGate/loadbalancer"
 	"fmt"
-	"log"
 )
 
 func PickHealthyServer(lb loadbalancer.LoadBalancer, breakers map[string]*circuitbreaker.CircuitBreaker) (string, error) {
@@ -22,14 +21,12 @@ func PickHealthyServer(lb loadbalancer.LoadBalancer, breakers map[string]*circui
 			return "", err
 		}
 
-		log.Printf("[pick] trying server %s", server)
+		_ = server
 
 		cb := breakers[server] // string key = server URL
 
 		if cb == nil || cb.Allow() {
-			if cb != nil {
-				log.Printf("[pick] server %s allowed by circuit breaker", server)
-			}
+			// server allowed by circuit breaker
 			// allowed upstream
 			return server, nil
 		}

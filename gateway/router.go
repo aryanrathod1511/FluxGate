@@ -7,7 +7,6 @@ import (
 	"FluxGate/middleware"
 	"FluxGate/proxy"
 	"context"
-	"log"
 	"net/http"
 	"time"
 )
@@ -57,7 +56,6 @@ func (g *Gateway) Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// put route into context
-	log.Printf("[gateway] incoming: %s %s for user=%s; matched route=%s", r.Method, r.URL.Path, userId, route.Path)
 	r = r.WithContext(context.WithValue(r.Context(), configuration.RouteCtxKey, route))
 
 	// build middleware chain

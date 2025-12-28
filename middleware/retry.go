@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -77,7 +76,7 @@ func RetryHandler(breakers map[string]*circuitbreaker.CircuitBreaker) func(http.
 					capture:        capture,
 				}
 
-				log.Printf("[retry] attempt=%d upstream=%s", attempt+1, upstream)
+				// retry attempt logged removed
 				next.ServeHTTP(rw, r)
 
 				status := capture.status
